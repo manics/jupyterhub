@@ -12,6 +12,6 @@
   "bower": "*",
   "less": "^2.7.1",
   "less-plugin-clean-css": "^1.5.1",
-  "clean-css": "^3.4.13"
+  "clean-css": "^4.2.3"
  }
 }
