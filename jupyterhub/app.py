@@ -2874,9 +2874,13 @@ class JupyterHub(Application):
             elif parsed.scheme == 'https':
                 port = 443
 
+            hostname = parsed.hostname
+            if hostname is None:
+                hub_url = urlparse(self.hub.host)
+                hostname = hub_url.hostname
             server = service.orm.server = orm.Server(
                 proto=parsed.scheme,
-                ip=parsed.hostname,
+                ip=hostname,
                 port=port,
                 cookie_name=service.oauth_client_id,
                 base_url=service.prefix,
