@@ -206,8 +206,10 @@ class Service(LoggingConfigurable):
     )
     url = Unicode(help="""URL of the service.
 
-        Only specify if the service runs an HTTP(s) endpoint that.
+        Only specify if the service runs an HTTP(s) endpoint that should be externally accessible.
         If managed, will be passed as JUPYTERHUB_SERVICE_URL env.
+
+        If the host is omitted for a managed service it will listen on the hub interface.
         """).tag(input=True)
 
     oauth_roles = List(help="""OAuth allowed roles.
