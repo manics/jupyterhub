@@ -190,10 +190,9 @@ jobs:
               pip install "jupyter_server==${{ matrix.jupyter_server }}"
           fi
           if [ "${{ matrix.jupyverse }}" != "" ]; then
+              pip install "jupyverse[jupyterlab,auth-jupyterhub]"
+              pip install "git+https://github.com/davidbrochart/jupyverse.git@fix-auth-jupyterhub#egg=fps_auth_jupyterhub&subdirectory=plugins/auth_jupyterhub" --ignore-installed
               pip install -e .
-              pip install "jupyverse >=0.7.3"
-              pip install "fps-jupyterlab >=0.7.3"
-              pip install "fps-auth-jupyterhub >=0.7.3"
           fi
           if [ "${{ matrix.db }}" == "mysql" ]; then
               pip install mysqlclient
