@@ -190,7 +190,7 @@ jobs:
               pip install "jupyter_server==${{ matrix.jupyter_server }}"
           fi
           if [ "${{ matrix.jupyverse }}" != "" ]; then
-              pip install "jupyverse[jupyterlab,auth-jupyterhub]"
+              pip install "jupyverse[jupyterlab,auth-jupyterhub] @ git+https://github.com/jupyter-server/jupyverse"
               pip install -e .
           fi
           if [ "${{ matrix.db }}" == "mysql" ]; then
