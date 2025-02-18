@@ -41,17 +41,16 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -qq \
  && apt-get install -yqq --no-install-recommends \
-    build-essential \
     ca-certificates \
     curl \
     git \
     gnupg \
-    locales \
-    python3-dev \
-    python3-pip \
-    python3-pycurl \
-    python3-venv \
- && python3 -m pip install --no-cache-dir --upgrade setuptools pip build wheel
+    python3-venv
+
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+RUN python3 -mvenv $VIRTUAL_ENV && \
+    python3 -m pip install --no-cache-dir --upgrade setuptools pip build wheel
 # Ubuntu 24.04 provides nodejs version 18 which is a bit outdated, so we install
 # a newer version by adding an apt source (used only by configurable-http-proxy)
 ARG NODE_MAJOR=22
@@ -86,15 +85,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -qq \
  && apt-get install -yqq --no-install-recommends \
-    build-essential \
     ca-certificates \
     curl \
-    locales \
-    python3-dev \
-    python3-pip \
-    python3-pycurl \
-    python3-venv \
- && python3 -m pip install --no-cache-dir --upgrade setuptools pip build wheel
+    python3-venv
+
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+RUN python3 -mvenv $VIRTUAL_ENV && \
+    python3 -m pip install --no-cache-dir --upgrade setuptools pip build wheel
 
 WORKDIR /src/jupyterhub
 
@@ -128,17 +126,20 @@ RUN apt-get update -qq \
     curl \
     gnupg \
     locales \
-    python-is-python3 \
-    python3-pip \
-    python3-pycurl \
+    python3-venv \
     nodejs \
     npm \
  && locale-gen $LC_ALL \
  && npm install -g configurable-http-proxy@^4.2.0 \
  # clean cache and logs
  && rm -rf /var/lib/apt/lists/* /var/log/* /var/tmp/* ~/.npm
+
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
 # install the wheels we built in the previous stage
 RUN --mount=type=cache,from=wheel-builder,source=/src/jupyterhub/wheelhouse,target=/tmp/wheelhouse \
+    python3 -mvenv $VIRTUAL_ENV && \
     # always make sure pip is up to date!
     python3 -m pip install --no-compile --no-cache-dir --upgrade setuptools pip \
  && python3 -m pip install --no-compile --no-cache-dir /tmp/wheelhouse/*
