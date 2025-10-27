@@ -69,6 +69,7 @@ from .crypto import CryptKeeper
 
 # For faking stats
 from .emptyclass import EmptyClass
+from .handlers.metrics import metrics_application
 from .handlers.static import CacheControlStaticFilesHandler, LogoHandler
 from .log import CoroutineLogFormatter, log_request
 from .metrics import (
@@ -1239,6 +1240,18 @@ class JupyterHub(Application):
         True, help="Authentication for prometheus metrics"
     ).tag(config=True)
 
+    metrics_host = Unicode(
+        "",
+        allow_none=True,
+        help="Serve metrics on this host, ignores if metrics_port not set",
+    ).tag(config=True)
+
+    metrics_port = Integer(
+        None,
+        allow_none=True,
+        help="Server metric on this port (authentication not supported)",
+    ).tag(config=True)
+
     @observe('api_tokens')
     def _deprecate_api_tokens(self, change):
         self.log.warning(
@@ -1581,6 +1594,7 @@ class JupyterHub(Application):
 
     _log_formatter_cls = CoroutineLogFormatter
     http_server = None
+    metrics_http_server = None
     proxy_process = None
     io_loop = None
 
@@ -3284,6 +3298,7 @@ class JupyterHub(Application):
             spawn_throttle_retry_range=self.spawn_throttle_retry_range,
             active_server_limit=self.active_server_limit,
             authenticate_prometheus=self.authenticate_prometheus,
+            metrics_port=self.metrics_port,
             internal_ssl=self.internal_ssl,
             internal_certs_location=self.internal_certs_location,
             internal_authorities=self.internal_ssl_authorities,
@@ -3756,6 +3771,18 @@ class JupyterHub(Application):
             self.log.error("Failed to bind hub to %s", self.hub.bind_url)
             raise
 
+        # Start metrics server if configured to run on a different port
+        if self.metrics_port:
+            self.metrics_http_server = tornado.httpserver.HTTPServer(
+                metrics_application()
+            )
+            self.metrics_http_server.listen(
+                self.metrics_port, address=self.metrics_host
+            )
+            self.log.info(
+                "Hub metrics listening on %s:%d", self.metrics_host, self.metrics_port
+            )
+
         # start the service(s)
         for service_name, service in self._service_map.items():
             service_ready = await self.start_service(service_name, service, ssl_context)
@@ -3902,6 +3929,8 @@ class JupyterHub(Application):
             return
         if self.http_server:
             self.http_server.stop()
+        if self.metrics_http_server:
+            self.metrics_http_server.stop()
         if self.metrics_collector:
             self.metrics_collector.stop()
         self.io_loop.add_callback(self.shutdown_cancel_tasks)
