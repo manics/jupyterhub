@@ -41,15 +41,33 @@ require(["jquery", "moment", "jhapi"], function ($, moment, JHAPI) {
     }
   }
 
+  function safeServerName(s) {
+    // lowercase, start with letter, alphanumeric only, length 1-30
+    const MAX_LENGTH = 30;
+    let safe_name = s
+      .toLowerCase()
+      // remove non-unicode non-alphanumeric characters
+      .replace(/[^\p{L}\p{N}]/gu, "")
+      // hex-escape remaining non-ascii characters
+      .replace(/[^a-z0-9]/g, (c) => "x" + c.codePointAt(0).toString(16))
+      .substring(0, MAX_LENGTH);
+
+    if (!/^[a-z]/.test(safe_name)) {
+      safe_name = "x" + safe_name.substring(0, MAX_LENGTH - 1);
+    }
+    return safe_name;
+  }
+
   function startServer() {
     var row = getRow($(this));
-    var serverName = row.find(".new-server-name").val();
-    if (serverName === "") {
+    var displayName = row.find(".new-server-name").val();
+    if (displayName === "") {
       // ../spawn/user/ causes a 404, ../spawn/user redirects correctly to the default server
       window.location.href = "./spawn/" + user;
     } else {
-      window.location.href =
-        "./spawn/" + user + "/" + serverName + "?convertname=1";
+      let serverName = safeServerName(displayName);
+      displayName = encodeURIComponent(displayName);
+      window.location.href = `./spawn/${user}/${serverName}?displayname=${displayName}`;
     }
   }
 

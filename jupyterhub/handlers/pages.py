@@ -15,7 +15,7 @@ from tornado.httputil import url_concat
 from .. import __version__, orm
 from ..metrics import SERVER_POLL_DURATION_SECONDS, ServerPollStatus
 from ..scopes import describe_raw_scopes, needs_scope
-from ..slugs import is_valid_safe_slug, safe_slug
+from ..slugs import is_valid_safe_slug
 from ..utils import (
     format_exception,
     maybe_future,
@@ -142,15 +142,12 @@ class SpawnHandler(BaseHandler):
         if user_name is None:
             user_name = self.current_user.name
         if server_name:
-            server_displayname = server_name
-            # The current form is used to manage existing servers as well as create
-            # new ones so look for this parameter to indicate it's a new spawner
-            # TODO: Have a different endpoint for creating new servers?
-            convertname = self.request.arguments.get("convertname")
-            if convertname and convertname[0].decode() == "1":
-                # User submitted this from the UI, so treat as a user-friendly
-                # displayname and convert to a safe_slug
-                server_name = safe_slug(server_name)
+            # server_name must be safe, but user can provide a friendly name
+            server_displayname = self.request.arguments.get("displayname")
+            if server_displayname:
+                server_displayname = server_displayname[0].decode()
+            if not server_displayname:
+                server_displayname = server_name
         else:
             server_displayname = server_name = ""
 

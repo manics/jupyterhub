@@ -19,7 +19,8 @@ _alphanum_lower = tuple(string.ascii_lowercase + string.digits)
 _object_pattern = re.compile(r'^[a-z0-9\-]+$')
 _label_pattern = re.compile(r'^[a-z0-9\.\-_]+$', flags=re.IGNORECASE)
 
-_alphanum_pattern = re.compile(r'^[a-z0-9]+$')
+# 1-30 alphanumeric lowercase, must start with letter
+_alphanum_label = re.compile(r'^[a-z][a-z0-9]{0,29}$')
 
 # match anything that's not lowercase alphanumeric (will be stripped, replaced with '-')
 _non_alphanum_pattern = re.compile(r'[^a-z0-9]+')
@@ -49,20 +50,10 @@ def _is_valid_general(
 
 
 def is_valid_safe_slug(s):
-    """Checks if this is a safe slug
-
-    alphanumeric, with an optional '-' in the middle
-    """
-    if len(s) > 32:
-        return False
-    name, sep, suffix = s.partition("-")
-    if not name or (sep and not suffix):
-        return False
-    if not _alphanum_pattern.match(name):
-        return False
-    if suffix and not _alphanum_pattern.match(suffix):
-        return False
-    return True
+    """Checks if this is a safe slug"""
+    if _alphanum_label.match(s):
+        return True
+    return False
 
 
 def is_valid_object_name(s):

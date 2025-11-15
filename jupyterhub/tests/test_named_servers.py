@@ -125,24 +125,14 @@ async def test_default_server(app, named_servers):
         # New servers can have an optional displayname, defaults to servername
         ('trevor', None, 'trevor', False, False),
         ('trevor', 'My name is Trevor', 'trevor', False, False),
-        # Valid server names are alphanumeric, or alphanumeric-HASH8
         (
-            'server1',
+            'abcdefghijklmnopqrstuvwxyz0123',
             "e_êẹèêéøßæṣ-",
-            "server1",
+            "abcdefghijklmnopqrstuvwxyz0123",
             False,
             False,
         ),
-        (
-            'server-abcdef12',
-            "e_êẹèêéøßæṣ-",
-            "server-abcdef12",
-            False,
-            False,
-        ),
-        # TODO: this only tests the API. We should also test the spawn UI where
-        # the user supplies only a displayname, and the servername is generated
-        # automatically
+        # TODO: this only tests the API. We should also test the spawn UI
     ],
 )
 async def test_create_or_start_named_server(
@@ -235,7 +225,14 @@ async def test_create_or_start_named_server(
 
 
 @pytest.mark.parametrize(
-    "servername", ["a$/b", "$p~c|a! ch@rs", "hash#?question", "server-abc-def"]
+    "servername",
+    [
+        "a$/b",
+        "$p~c|a! ch@rs",
+        "hash#?question",
+        "server-abc",
+        "abcdefghijklmnopqrstuvwxyz01234",
+    ],
 )
 async def test_create_invalid_named_server(app, named_servers, servername):
     username = 'walnut'
