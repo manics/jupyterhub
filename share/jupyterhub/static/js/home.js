@@ -1,7 +1,12 @@
 // Copyright (c) Jupyter Development Team.
 // Distributed under the terms of the Modified BSD License.
 
-require(["jquery", "moment", "jhapi"], function ($, moment, JHAPI) {
+require(["jquery", "moment", "jhapi", "punycode"], function (
+  $,
+  moment,
+  JHAPI,
+  punycode,
+) {
   "use strict";
 
   var base_url = window.jhdata.base_url;
@@ -44,12 +49,10 @@ require(["jquery", "moment", "jhapi"], function ($, moment, JHAPI) {
   function safeServerName(s) {
     // lowercase, start with letter, alphanumeric only, length 1-30
     const MAX_LENGTH = 30;
-    let safe_name = s
-      .toLowerCase()
-      // remove non-unicode non-alphanumeric characters
-      .replace(/[^\p{L}\p{N}]/gu, "")
-      // hex-escape remaining non-ascii characters
-      .replace(/[^a-z0-9]/g, (c) => "x" + c.codePointAt(0).toString(16))
+    let safe_name = punycode
+      .encode(s.toLowerCase())
+      // remove non-ascii-alphanumeric characters
+      .replace(/[^a-z0-9]/g, "")
       .substring(0, MAX_LENGTH);
 
     if (!/^[a-z]/.test(safe_name)) {
