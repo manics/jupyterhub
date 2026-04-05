@@ -327,7 +327,7 @@ class Proxy(LoggingConfigurable):
 
     async def add_user(self, user, server_name='', client=None):
         """Add a user's server to the proxy table."""
-        spawner = user.spawners[server_name]
+        spawner = user.get_spawner(server_name)
         self.log.info(
             "Adding user %s to proxy %s => %s",
             user.name,

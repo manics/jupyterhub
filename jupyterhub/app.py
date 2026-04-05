@@ -2988,7 +2988,7 @@ class JupyterHub(Application):
             return ' '.join(parts)
 
         async def user_stopped(user, server_name):
-            spawner = user.spawners[server_name]
+            spawner = user.get_spawner(server_name)
             status = await spawner.poll()
             self.log.warning(
                 "User %s server stopped with exit code: %s", user.name, status
@@ -3108,7 +3108,7 @@ class JupyterHub(Application):
             # instantiate Spawner wrapper and check if it's still alive
             # spawner should be running
             user = self.users[orm_user]
-            spawner = user.spawners[orm_spawner.name]
+            spawner = user.get_spawner(orm_spawner.name)
             self.log.debug("Loading state for %s from db", spawner._log_name)
             # signal that check is pending to avoid race conditions
             spawner._check_pending = True

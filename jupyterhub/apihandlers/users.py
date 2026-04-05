@@ -734,7 +734,7 @@ class UserServerAPIHandler(APIHandler):
         elif remove:
             raise web.HTTPError(400, "Cannot delete the default server")
 
-        spawner = user.spawners[server_name]
+        spawner = user.get_spawner(server_name)
         if spawner.pending == 'stop':
             self.log.debug("%s already stopping", spawner._log_name)
             self.set_header('Content-Type', 'text/plain')
@@ -851,7 +851,7 @@ class SpawnProgressAPIHandler(APIHandler):
         if server_name not in user.spawners:
             # user has no such server
             raise web.HTTPError(404)
-        spawner = user.spawners[server_name]
+        spawner = user.get_spawner(server_name)
 
         # start sending keepalive to avoid proxies closing the connection
         asyncio.ensure_future(self.keepalive())

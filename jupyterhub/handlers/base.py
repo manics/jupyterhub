@@ -1129,7 +1129,7 @@ class BaseHandler(RequestHandler):
             f'/{active_server_limit}' if active_server_limit else '',
         )
 
-        spawner = user.spawners[server_name]
+        spawner = user.get_spawner(server_name)
         # set spawn_pending now, so there's no gap where _spawn_pending is False
         # while we are waiting for _proxy_pending to be set
         spawner._spawn_pending = True
@@ -1309,7 +1309,7 @@ class BaseHandler(RequestHandler):
 
     async def user_stopped(self, user, server_name):
         """Callback that fires when the spawner has stopped"""
-        spawner = user.spawners[server_name]
+        spawner = user.get_spawner(server_name)
 
         poll_start_time = time.perf_counter()
         status = await spawner.poll()
@@ -1340,7 +1340,7 @@ class BaseHandler(RequestHandler):
     async def stop_single_user(self, user, server_name=''):
         if server_name not in user.spawners:
             raise KeyError("User %s has no such spawner %r", user.name, server_name)
-        spawner = user.spawners[server_name]
+        spawner = user.get_spawner(server_name)
         if spawner.pending:
             raise RuntimeError(f"{spawner._log_name} pending {spawner.pending}")
 
@@ -1799,7 +1799,7 @@ class UserUrlHandler(BaseHandler):
         else:
             server_name = ''
         escaped_server_name = url_escape_path(server_name)
-        spawner = user.spawners[server_name]
+        spawner = user.get_spawner(server_name)
 
         if spawner.ready:
             # spawner is ready, try redirecting back to the /user url

@@ -464,7 +464,7 @@ class SpawnPendingHandler(BaseHandler):
             raise web.HTTPError(404, f"{user.name} has no such server {server_name}")
 
         escaped_server_name = url_escape_path(server_name)
-        spawner = user.spawners[server_name]
+        spawner = user.get_spawner(server_name)
 
         if spawner.ready:
             # spawner is ready and waiting. Redirect to it.
@@ -718,7 +718,7 @@ class AcceptShareHandler(BaseHandler):
         # default behavior:
         # if it's active, redirect to server URL
         if spawner.name in owner.spawners:
-            spawner = owner.spawners[spawner.name]
+            spawner = owner.get_spawner(spawner.name)
             if spawner.active:
                 # redirect to spawner url
                 next_url = owner.server_url(spawner.name)
@@ -749,7 +749,7 @@ class AcceptShareHandler(BaseHandler):
         owner = self._user_from_orm(share_code.owner)
         spawner = share_code.spawner
         if spawner.name in owner.spawners:
-            spawner = owner.spawners[spawner.name]
+            spawner = owner.get_spawner(spawner.name)
             spawner_ready = spawner.ready
         else:
             spawner_ready = False

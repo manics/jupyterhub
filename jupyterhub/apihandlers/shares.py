@@ -86,7 +86,7 @@ class _ShareAPIHandler(APIHandler):
         user = self.users[spawner.user.id]
         if spawner.name in user.spawners:
             # use Spawner wrapper if it's active
-            spawner = user.spawners[spawner.name]
+            spawner = user.get_spawner(spawner.name)
         full_model = super().server_model(spawner, user=user)
         # filter out subset of fields
         server_model = {

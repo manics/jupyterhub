@@ -204,16 +204,6 @@ class UserDict(dict):
         return counts
 
 
-class _SpawnerDict(dict):
-    def __init__(self, spawner_factory):
-        self.spawner_factory = spawner_factory
-
-    def __getitem__(self, key):
-        if key not in self:
-            self[key] = self.spawner_factory(key)
-        return super().__getitem__(key)
-
-
 class User:
     """High-level wrapper around an orm.User object"""
 
@@ -236,7 +226,7 @@ class User:
             + '/'
         )
 
-        self.spawners = _SpawnerDict(self._new_spawner)
+        self.spawners = {}
 
         # ensure default spawner exists in the database
         if '' not in self.orm_user.orm_spawners:
@@ -261,12 +251,17 @@ class User:
         .. versionadded:: 2.2
         """
         # This should throw an exception if the orm_spawner doesn't exist
-        spawner = self.spawners[server_name]
+        spawner = self.spawners.get(server_name)
+        if not spawner:
+            spawner = self._new_spawner(server_name)
+            self.spawners[server_name] = spawner
+
         if replace_failed and spawner._failed:
             self.log.debug(f"Discarding failed spawner {spawner._log_name}")
             # remove failed spawner, create a new one
             self.spawners.pop(server_name)
             spawner = self._new_spawner(server_name)
+            self.spawners[server_name] = spawner
         return spawner
 
     def get_or_create_spawner(self, server_name, display_name, replace_failed=False):
@@ -474,7 +469,7 @@ class User:
         # this may instantiate the Spawner if it wasn't already running,
         # just to delete it
         if isinstance(name_or_spawner, str):
-            spawner = self.spawners[name_or_spawner]
+            spawner = self.get_spawner(name_or_spawner)
         else:
             spawner = name_or_spawner
 
@@ -505,7 +500,7 @@ class User:
                 continue
             if name in self.spawners:
                 # yield wrapper if it exists (server may be active)
-                yield self.spawners[name]
+                yield self.get_spawner(name)
             else:
                 # otherwise, yield low-level ORM object (server is not active)
                 yield orm_spawner
@@ -620,7 +615,7 @@ class User:
     # singleton property, self.spawner maps onto spawner with empty server_name
     @property
     def spawner(self):
-        return self.spawners['']
+        return self.get_spawner('')
 
     @spawner.setter
     def spawner(self, spawner):
@@ -1146,7 +1141,7 @@ class User:
 
         and cleanup after it.
         """
-        spawner = self.spawners[server_name]
+        spawner = self.get_spawner(server_name)
         spawner._spawn_pending = False
         spawner._start_pending = False
         spawner._check_pending = False
