@@ -65,7 +65,7 @@ from traitlets.config import LoggingConfigurable
 
 from .. import orm
 from ..objects import Server
-from ..spawner import LocalProcessSpawner, set_user_setuid
+from ..spawner import LocalProcessSpawner, _get_popen_runas_args
 from ..traitlets import Command
 from ..utils import url_path_join
 
@@ -114,11 +114,11 @@ class _ServiceSpawner(LocalProcessSpawner):
             f"access:services!service={self._service_name}",
         ]
 
-    def make_preexec_fn(self, name):
+    def _popen_runas_args(self, name):
         if not name:
             # no setuid if no name
-            return
-        return set_user_setuid(name, chdir=False)
+            return {}
+        return _get_popen_runas_args(name, chdir=False)
 
     def user_env(self, env):
         if not self.user.name:
@@ -140,9 +140,9 @@ class _ServiceSpawner(LocalProcessSpawner):
             self.proc = Popen(
                 self.cmd,
                 env=env,
-                preexec_fn=self.make_preexec_fn(self.user.name),
                 start_new_session=True,  # don't forward signals
                 cwd=self.cwd or None,
+                **self._popen_runas_args(self.user.name),
             )
         except PermissionError:
             # use which to get abspath

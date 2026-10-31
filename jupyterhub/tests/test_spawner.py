@@ -7,7 +7,6 @@ import logging
 import os
 import signal
 import sys
-import tempfile
 import time
 from subprocess import Popen
 from unittest import mock
@@ -19,7 +18,7 @@ from .. import orm
 from .. import spawner as spawnermod
 from ..objects import Hub, Server
 from ..scopes import access_scopes
-from ..spawner import SimpleLocalProcessSpawner, Spawner
+from ..spawner import SimpleLocalProcessSpawner, Spawner, _get_workdir
 from ..user import User
 from ..utils import AnyTimeoutError, maybe_future, new_token, url_path_join
 from .mocking import public_url
@@ -30,6 +29,14 @@ import sys, time
 print(sys.argv)
 time.sleep(30)
 """
+
+_cwd_sleep = """
+import os, time
+with open("test.txt", "w") as f:
+    f.write(os.getcwd())
+time.sleep(30)
+"""
+
 
 _uninterruptible = """
 import time
@@ -61,8 +68,56 @@ def new_spawner(db, **kwargs):
     return user._new_spawner('', spawner_class=SimpleLocalProcessSpawner, **kwargs)
 
 
-async def test_spawner(db, request):
-    spawner = new_spawner(db)
+@pytest.mark.parametrize(
+    "path,uid,gids,expected",
+    [
+        ("/user", 1000, [1, 2], "/user"),
+        ("/user/private", 1000, [1, 2], "/user"),
+        ("/user", 1001, [100, 200], "/"),
+        ("/user/private", 1001, [100, 200], "/"),
+        ("/group", 1000, [100, 200], "/group"),
+        ("/group/private", 1000, [100, 200], "/group"),
+        ("/group", 1000, [200], "/"),
+        ("/group/private", 1000, [200], "/"),
+        ("relative/dir", 1000, [100], None),
+    ],
+)
+def test_get_workdir(path, uid, gids, expected):
+    def mock_stat(p):
+        if p == "/user":
+            mode = 0o700
+            uid = 1000
+            gid = 100
+        elif p == "/group":
+            mode = 0o770
+            uid = 2000
+            gid = 100
+        elif p in ("/private", "/user/private", "/group/private"):
+            mode = 0o770
+            uid = 9999
+            gid = 9999
+        else:
+            raise ValueError(f"Unexpected path: {path}")
+
+        return os.stat_result((mode, 0, 0, 0, uid, gid, 0, 0, 0, 0))
+
+    if path == "relative/dir":
+        with pytest.raises(ValueError):
+            _get_workdir(path, uid, gids)
+    else:
+        with mock.patch("os.stat", mock_stat):
+            d = _get_workdir(path, uid, gids)
+        assert d == expected
+
+
+async def test_spawner(tmp_path, db, request):
+    spawner = new_spawner(
+        db,
+        home_dir_template=str(tmp_path) + "/{username}",
+        cmd=[sys.executable, '-c', _cwd_sleep],
+    )
+    expected_home_dir = tmp_path / spawner.user.name
+
     ip, port = await spawner.start()
     assert ip == '127.0.0.1'
     assert isinstance(port, int)
@@ -78,6 +133,10 @@ async def test_spawner(db, request):
     status = await spawner.poll()
     assert status is not None
     assert isinstance(status, int)
+
+    # Check we switched to the correct directory
+    text = (expected_home_dir / "test.txt").read_text()
+    assert text == str(expected_home_dir)
 
 
 def test_spawner_from_db(app, user):
@@ -200,28 +259,6 @@ async def test_spawner_poll(db):
     await asyncio.sleep(2)
     status = await spawner.poll()
     assert status is not None
-
-
-def test_setcwd():
-    cwd = os.getcwd()
-    with tempfile.TemporaryDirectory() as td:
-        td = os.path.realpath(os.path.abspath(td))
-        spawnermod._try_setcwd(td)
-        assert os.path.samefile(os.getcwd(), td)
-    os.chdir(cwd)
-    chdir = os.chdir
-    temp_root = os.path.realpath(os.path.abspath(tempfile.gettempdir()))
-
-    def raiser(path):
-        path = os.path.realpath(os.path.abspath(path))
-        if not path.startswith(temp_root):
-            raise OSError(path)
-        chdir(path)
-
-    with mock.patch('os.chdir', raiser):
-        spawnermod._try_setcwd(cwd)
-        assert os.getcwd().startswith(temp_root)
-    os.chdir(cwd)
 
 
 def test_string_formatting(db):

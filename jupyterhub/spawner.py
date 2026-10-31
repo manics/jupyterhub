@@ -10,12 +10,10 @@ import os
 import shlex
 import shutil
 import signal
-import sys
 import warnings
 from contextlib import aclosing
 from inspect import isawaitable, signature
 from subprocess import Popen
-from tempfile import mkdtemp
 from textwrap import dedent
 from urllib.parse import urlparse
 
@@ -1863,30 +1861,36 @@ class Spawner(LoggingConfigurable):
                 self._apply_overrides(go['spawner_override'])
 
 
-def _try_setcwd(path):
-    """Try to set CWD to path, walking up until a valid directory is found.
+def _get_workdir(path, uid, gids):
+    """Try to find an existing path that CWD can be set to in popen
 
-    If no valid directory is found, a temp directory is created and cwd is set to that.
+    Walk up until a valid directory is found, or /
     """
+    if not path.startswith("/"):
+        raise ValueError(f"Absolute path required: {path}")
+
     while path != '/':
-        try:
-            os.chdir(path)
-        except OSError as e:
-            exc = e  # break exception instance out of except scope
-            print(f"Couldn't set CWD to {path} ({e})", file=sys.stderr)
-            path, _ = os.path.split(path)
-        else:
-            return
-    print(f"Couldn't set CWD at all ({exc}), using temp dir", file=sys.stderr)
-    td = mkdtemp()
-    os.chdir(td)
+        st = os.stat(path)
+        # user rwx, group rwx, other rwx
+
+        if st.st_uid == uid and (st.st_mode & 0o100):
+            break
+        if st.st_gid in gids and (st.st_mode & 0o010):
+            break
+        if st.st_mode & 0o001:
+            break
+
+        path, _ = os.path.split(path)
+
+    return path
 
 
-def set_user_setuid(username, chdir=True):
-    """Return a preexec_fn for spawning a single-user server as a particular user.
+def _get_popen_runas_args(username, chdir=True):
+    """Return popen keyword args for spawning a single-user server as a particular user.
 
-    Returned preexec_fn will set uid/gid, and attempt to chdir to the target user's
-    home directory.
+    Keywords include user, group, extra_groups.
+    If chdir=True then cwd is also set to the target user's home directory, or the
+    best alternative if it doesn't exist.
     """
     import pwd
 
@@ -1896,45 +1900,14 @@ def set_user_setuid(username, chdir=True):
     home = user.pw_dir
     gids = os.getgrouplist(username, gid)
 
-    def preexec():
-        """Set uid/gid of current process
-
-        Executed after fork but before exec by python.
-
-        Also try to chdir to the user's home directory.
-        """
-        os.setgid(gid)
-        # set supplemental groups, which doesn't always succeed.
-        # if it fails, make sure we don't inherit any group membership.
-        try:
-            os.setgroups(gids)
-            groups_ok = True
-        except Exception as e:
-            print(f'Failed to set groups: {e}', file=sys.stderr)
-            groups_ok = False
-            # Setting groups failed, clear supplemental group list to ensure we don't inherit groups.
-            # This might fail is syscall is rejected altogether.
-            try:
-                os.setgroups([])
-            except Exception as e:
-                print(f'Failed to clear groups: {e}', file=sys.stderr)
-
-        os.setuid(uid)
-
-        if not groups_ok:
-            # if setting groups failed, verify group membership.
-            # only verify that we don't have any groups we shouldn't.
-            # must be checked after setuid.
-            current_groups = set(os.getgroups())
-            extra_groups = current_groups.difference(gids)
-            if extra_groups:
-                raise PermissionError(f"Failed to drop groups: {extra_groups}")
-
-        # start in the user's home dir
-        if chdir:
-            _try_setcwd(home)
-
-    return preexec
+    kwargs = {
+        "user": uid,
+        "group": gid,
+        "extra_groups": gids,
+    }
+    if chdir:
+        kwargs["cwd"] = _get_workdir(home, uid, [gid] + gids)
+    return kwargs
 
 
 class LocalProcessSpawner(Spawner):
@@ -2039,11 +2012,12 @@ class LocalProcessSpawner(Spawner):
 
     def make_preexec_fn(self, name):
         """
-        Return a function that can be used to set the user id of the spawned process to user with name `name`
-
-        This function can be safely passed to `preexec_fn` of `Popen`
+        Return a function that can be passed to `preexec_fn` of `Popen`
         """
-        return set_user_setuid(name)
+        return None
+
+    def _get_popen_runas_args(self):
+        return _get_popen_runas_args(self.user.name, True)
 
     def load_state(self, state):
         """Restore state about spawned single-user server after a hub restart.
@@ -2156,6 +2130,7 @@ class LocalProcessSpawner(Spawner):
             preexec_fn=self.make_preexec_fn(self.user.name),
             start_new_session=True,  # don't forward signals
         )
+        popen_kwargs.update(self._get_popen_runas_args())
         popen_kwargs.update(self.popen_kwargs)
         # don't let user config override env
         popen_kwargs['env'] = env
@@ -2290,17 +2265,10 @@ class SimpleLocalProcessSpawner(LocalProcessSpawner):
     def _default_home_dir(self):
         return self.home_dir_template.format(username=self.user.name)
 
-    def make_preexec_fn(self, name):
+    def _get_popen_runas_args(self):
         home = self.home_dir
-
-        def preexec():
-            try:
-                os.makedirs(home, 0o755, exist_ok=True)
-                os.chdir(home)
-            except Exception as e:
-                self.log.exception("Error in preexec for %s", name)
-
-        return preexec
+        os.makedirs(home, 0o755, exist_ok=True)
+        return {"cwd": home}
 
     def user_env(self, env):
         env['USER'] = self.user.name
